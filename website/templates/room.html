@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+
+{% block title %}Join Room - SecureChat{% endblock %}
+
+{% block content %}
+<div class="container mt-5 pt-5">
+    <div class="row justify-content-center">
+        <!-- Left Column: Actions -->
+        <div class="col-md-5 mb-4">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-white border-0 p-0">
+                    <ul class="nav nav-pills nav-fill p-2 bg-light rounded-top-4" id="roomTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active rounded-pill fw-bold" id="create-tab" data-bs-toggle="pill" data-bs-target="#create" type="button" role="tab">Create Room</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link rounded-pill fw-bold" id="join-tab" data-bs-toggle="pill" data-bs-target="#join" type="button" role="tab">Join Room</button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body p-4">
+                    <div class="tab-content" id="roomTabsContent">
+                        <!-- Create Room Tab -->
+                        <div class="tab-pane fade show active" id="create" role="tabpanel">
+                            <div class="text-center mb-4">
+                                <div class="avatar-circle bg-primary-subtle text-primary mx-auto mb-3">
+                                    <i class="fas fa-plus fa-2x"></i>
+                                </div>
+                                <h4 class="fw-bold">Start a New Chat</h4>
+                                <p class="text-muted small">Create a secure room and invite others.</p>
+                            </div>
+                            <form method="POST" action="/create-room">
+                                <div class="form-floating mb-3">
+                                    <input type="text" class="form-control rounded-3" id="roomNameInput" name="room_name" placeholder="Room Name" required>
+                                    <label for="roomNameInput">Room Name</label>
+                                </div>
+                                <div class="form-floating mb-3">
+                                    <input type="password" class="form-control rounded-3" id="roomPasswordInput" name="password" placeholder="Password (Optional)">
+                                    <label for="roomPasswordInput">Password (Optional)</label>
+                                </div>
+                                <button class="btn btn-primary-custom w-100 py-2 fw-bold" type="submit">
+                                    Create Room <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <!-- Join Room Tab -->
+                        <div class="tab-pane fade" id="join" role="tabpanel">
+                            <div class="text-center mb-4">
+                                <div class="avatar-circle bg-success-subtle text-success mx-auto mb-3">
+                                    <i class="fas fa-sign-in-alt fa-2x"></i>
+                                </div>
+                                <h4 class="fw-bold">Join Existing Room</h4>
+                                <p class="text-muted small">Enter the room code to connect.</p>
+                            </div>
+                            <form method="POST" action="/join-room">
+                                <div class="form-floating mb-3">
+                                    <input type="text" class="form-control rounded-3" id="roomCodeInput" name="room_code" placeholder="Room Code" required>
+                                    <label for="roomCodeInput">Room Code</label>
+                                </div>
+                                <div class="form-floating mb-3">
+                                    <input type="password" class="form-control rounded-3" id="joinPasswordInput" name="password" placeholder="Password (If required)">
+                                    <label for="joinPasswordInput">Password (If required)</label>
+                                </div>
+                                <button class="btn btn-primary-custom w-100 py-2 fw-bold" type="submit">
+                                    Join Room <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Management Card -->
+            <div class="card shadow-sm border-0 rounded-4 mt-4">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-square bg-dark text-white rounded-3 me-3 p-2">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Security Center</h5>
+                            <small class="text-muted">Manage your encryption keys</small>
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button class="btn btn-outline-dark w-100 py-2 rounded-3" onclick="showExportModal()">
+                                <i class="fas fa-qrcode mb-1 d-block"></i> Export
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-outline-dark w-100 py-2 rounded-3" onclick="showImportModal()">
+                                <i class="fas fa-camera mb-1 d-block"></i> Import
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Room List -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-lg border-0 rounded-4 h-100">
+                <div class="card-header bg-white border-0 p-4 pb-0">
+                    <h4 class="fw-bold mb-0">Your Rooms</h4>
+                    <p class="text-muted small">Rooms you have joined recently.</p>
+                </div>
+                <div class="card-body p-4">
+                    {% if joined_rooms %}
+                    <div class="list-group list-group-flush">
+                        {% for room in joined_rooms %}
+                        <a href="{{ url_for('views.chat', room_code=room.room_name) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 px-2 border-bottom-0 rounded-3 mb-2 hover-bg-light">
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-sm bg-primary text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    {{ room.room_name[:2].upper() }}
+                                </div>
+                                <div>
+                                    <h6 class="mb-0 fw-bold text-dark">{{ room.room_name }}</h6>
+                                    <small class="text-muted">Tap to enter</small>
+                                </div>
+                            </div>
+                            <span class="btn btn-sm btn-light rounded-circle">
+                                <i class="fas fa-chevron-right text-muted"></i>
+                            </span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <img src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" alt="No Rooms" width="80" class="mb-3 opacity-50">
+                        <h6 class="text-muted">No rooms yet</h6>
+                        <p class="small text-muted">Create or join a room to get started.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Export Modal -->
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Export Private Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="text-muted small">Scan this QR code on your other device to transfer your encrypted private key.</p>
+                    <div id="qrcode" class="d-flex justify-content-center my-3"></div>
+                    <div id="export-error" class="text-danger small"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Private Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="reader" style="width: 100%"></div>
+                    <div id="import-status" class="text-center mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const username = "{{ current_user.username }}";
+    let html5QrcodeScanner = null;
+
+    function showExportModal() {
+        const encryptedKey = localStorage.getItem('private_key_' + username);
+        if (!encryptedKey) {
+            alert("No private key found on this device to export.");
+            return;
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('exportModal'));
+        modal.show();
+
+        // Clear previous QR
+        const qrContainer = document.getElementById('qrcode');
+        qrContainer.innerHTML = '<canvas id="qr-canvas"></canvas>';
+        
+        // Generate QR with node-qrcode
+        const canvas = document.getElementById('qr-canvas');
+        QRCode.toCanvas(canvas, encryptedKey, { 
+            width: 256,
+            margin: 1,
+            errorCorrectionLevel: 'L' // Use Low error correction to maximize capacity
+        }, function (error) {
+            if (error) {
+                console.error(error);
+                document.getElementById('export-error').innerText = "Error generating QR code: " + error.message;
+            }
+        });
+    }
+
+    function showImportModal() {
+        const modal = new bootstrap.Modal(document.getElementById('importModal'));
+        modal.show();
+
+        // Initialize scanner
+        if (html5QrcodeScanner === null) {
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "reader", 
+                { fps: 10, qrbox: {width: 250, height: 250} },
+                /* verbose= */ false
+            );
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // Handle the scanned code as you like, for example:
+        console.log(`Code matched = ${decodedText}`, decodedResult);
+        
+        if (decodedText && decodedText.startsWith("U2FsdGVkX1")) { // Basic check for CryptoJS format (Salted__)
+            localStorage.setItem('private_key_' + username, decodedText);
+            
+            document.getElementById('import-status').innerHTML = '<span class="text-success fw-bold">Key Imported Successfully!</span>';
+            
+            // Stop scanning
+            html5QrcodeScanner.clear();
+            
+            setTimeout(() => {
+                const modalEl = document.getElementById('importModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                alert("Private Key imported! You can now decrypt messages.");
+            }, 1500);
+        } else {
+            document.getElementById('import-status').innerHTML = '<span class="text-danger">Invalid Key Format</span>';
+        }
+    }
+
+    function onScanFailure(error) {
+        // handle scan failure, usually better to ignore and keep scanning.
+        // for example:
+        // console.warn(`Code scan error = ${error}`);
+    }
+    
+    // Clean up scanner when modal closes
+    document.getElementById('importModal').addEventListener('hidden.bs.modal', function () {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear().catch(error => {
+                console.error("Failed to clear html5QrcodeScanner. ", error);
+            });
+            html5QrcodeScanner = null;
+        }
+        document.getElementById('import-status').innerHTML = '';
+    });
+</script>
+{% endblock %}

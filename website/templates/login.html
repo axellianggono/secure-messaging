@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - SecureChat{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="auth-title">Welcome Back</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="username" class="form-label fw-bold">Username</label>
+                <input type="text" class="form-control form-control-custom" id="username" name="username" placeholder="Enter your username" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label fw-bold">Password</label>
+                <input type="password" class="form-control form-control-custom" id="password" name="password" placeholder="Enter your password" required>
+            </div>
+            <div class="d-grid gap-2 mt-4">
+                <button type="submit" class="btn btn-primary-custom btn-lg">Login</button>
+            </div>
+            <div class="text-center mt-3">
+                <p class="text-muted">Don't have an account? <a href="/sign-up" class="auth-link">Sign Up</a></p>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

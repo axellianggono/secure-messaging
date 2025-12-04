@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign Up - SecureChat{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="auth-title">Create Account</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="username" class="form-label fw-bold">Username</label>
+                <input type="text" class="form-control form-control-custom" id="username" name="username" placeholder="Choose a username" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label fw-bold">Password</label>
+                <input type="password" class="form-control form-control-custom" id="password" name="password" placeholder="Create a password" required>
+            </div>
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label fw-bold">Confirm Password</label>
+                <input type="password" class="form-control form-control-custom" id="confirm_password" name="confirm_password" placeholder="Confirm your password" required>
+            </div>
+            <input type="hidden" id="public_key" name="public_key">
+            <div class="d-grid gap-2 mt-4">
+                <button type="submit" class="btn btn-primary-custom btn-lg" id="signup-btn">Sign Up</button>
+            </div>
+            <div class="text-center mt-3">
+                <p class="text-muted">Already have an account? <a href="/login" class="auth-link">Login</a></p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.querySelector('form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('signup-btn');
+        const originalText = btn.innerText;
+        btn.innerText = 'Generating Keys...';
+        btn.disabled = true;
+
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+
+        if (password !== confirmPassword) {
+            alert("Passwords do not match!");
+            btn.innerText = originalText;
+            btn.disabled = false;
+            return;
+        }
+
+        // Generate RSA Keys
+        const crypt = new JSEncrypt({default_key_size: 2048});
+        crypt.getKey(function() {
+            const privateKey = crypt.getPrivateKey();
+            const publicKey = crypt.getPublicKey();
+
+            // Encrypt Private Key with Password
+            const encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, password).toString();
+
+            // Store Encrypted Private Key in LocalStorage
+            // We use the username as part of the key to support multiple users on same device if needed, 
+            // but for now let's just use a generic key or maybe 'private_key_' + username if we can get it.
+            // Since we are submitting, let's just save it. Ideally we should save it after successful registration,
+            // but we can't do that easily without AJAX. For now, save it.
+            const username = document.getElementById('username').value;
+            localStorage.setItem('private_key_' + username, encryptedPrivateKey);
+
+            // Set Public Key in hidden input
+            document.getElementById('public_key').value = publicKey;
+
+            // Submit form
+            e.target.submit();
+        });
+    });
+</script>
+{% endblock %}

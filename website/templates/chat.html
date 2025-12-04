@@ -1,0 +1,359 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat - {{ room_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid chat-container">
+    <div class="row h-100">
+        <!-- Sidebar (Optional, maybe for active users later) -->
+        <div class="col-md-3 d-none d-md-block bg-light sidebar p-3">
+            <h5 class="fw-bold mb-4">Room: {{ room_code }}</h5>
+            <hr>
+            <h6 class="text-muted">Members</h6>
+            <ul class="list-unstyled" id="active-users">
+                {% for member in members %}
+                <li class="mb-2">
+                    <i class="fas fa-user text-secondary me-2"></i> {{ member.username }}
+                    {% if member.id == user.id %} (You) {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            <hr>
+            <div class="mt-auto">
+                <a href="/leave-room/{{ room_id }}" class="btn btn-outline-danger w-100">Leave Room</a>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="col-md-9 d-flex flex-column h-100 p-0">
+            <!-- Chat Header (Mobile only) -->
+            <div class="d-md-none bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
+                <span class="fw-bold">{{ room_code }}</span>
+                <a href="/leave-room/{{ room_id }}" class="btn btn-sm btn-outline-danger">Leave</a>
+            </div>
+
+            <!-- Messages Area -->
+            <div class="flex-grow-1 p-4 messages-area" id="messages">
+                <div class="text-center text-muted my-3">
+                    <small>Welcome to the {{ room_code }} room!</small>
+                </div>
+                
+                {% for chat, sender_username in chats %}
+                <div class="history-item mb-2 {{ 'align-self-end sent message-bubble' if chat.user_id == user.id else 'align-self-start received message-bubble' }}"
+                     data-ciphertext="{{ chat.ciphertext }}"
+                     data-iv="{{ chat.iv }}"
+                     data-encrypted-key="{{ chat.encrypted_session_key }}"
+                     data-sender="{{ sender_username }}"
+                     data-timestamp="{{ chat.timestamp }}">
+                     <small class="text-muted">Decrypting...</small>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-3 bg-white border-top">
+                <form id="message-form" class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-custom" id="message-input" placeholder="Type a message..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Unlock Modal -->
+<div class="modal fade" id="keyUnlockModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="keyUnlockModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="keyUnlockModalLabel">Unlock Your Private Key</h5>
+      </div>
+      <div class="modal-body">
+        <p>Please enter your login password to unlock your private key for decryption.</p>
+        <div class="mb-3">
+          <input type="password" class="form-control" id="unlock-password" placeholder="Enter Password">
+        </div>
+        <div id="unlock-error" class="text-danger small"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="unlock-btn">Unlock</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+<script>
+    const socket = io();
+    const room = "{{ room_code }}";
+    const roomId = {{ room_id }};
+    const username = "{{ user.username }}";
+    const currentUserId = {{ user.id }};
+    
+    // Member Public Keys (passed from server)
+    const members = [
+        {% for member in members %}
+        {
+            id: {{ member.id }},
+            username: "{{ member.username }}",
+            public_key: `{{ member.kunci_publik }}`
+        },
+        {% endfor %}
+    ];
+
+    let privateKey = null;
+
+    // --- Key Management ---
+
+    function unlockPrivateKey() {
+        const password = document.getElementById('unlock-password').value;
+        const encryptedKey = localStorage.getItem('private_key_' + username);
+
+        if (!encryptedKey) {
+            alert("No private key found on this device! You cannot read messages.");
+            return;
+        }
+
+        try {
+            const decryptedBytes = CryptoJS.AES.decrypt(encryptedKey, password);
+            const decryptedKey = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+            if (!decryptedKey || !decryptedKey.startsWith('-----BEGIN RSA PRIVATE KEY-----')) {
+                throw new Error("Invalid password");
+            }
+
+            privateKey = decryptedKey;
+            
+            // Cache in sessionStorage (cleared when tab closed)
+            sessionStorage.setItem('decrypted_key_' + username, privateKey);
+            
+            // Hide modal
+            const modalEl = document.getElementById('keyUnlockModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+
+            // Decrypt history
+            decryptHistory();
+
+        } catch (e) {
+            document.getElementById('unlock-error').innerText = "Incorrect password or corrupted key.";
+            console.error(e);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if key is already cached in session
+        const cachedKey = sessionStorage.getItem('decrypted_key_' + username);
+        if (cachedKey) {
+            privateKey = cachedKey;
+            decryptHistory();
+        } else {
+            // Show modal if not cached
+            const modal = new bootstrap.Modal(document.getElementById('keyUnlockModal'));
+            modal.show();
+        }
+
+        document.getElementById('unlock-btn').addEventListener('click', unlockPrivateKey);
+    });
+
+
+    // --- Encryption / Decryption Helpers ---
+
+    function generateSessionKey() {
+        return CryptoJS.lib.WordArray.random(32).toString(); // 256-bit key
+    }
+
+    function generateIV() {
+        return CryptoJS.lib.WordArray.random(16).toString(); // 128-bit IV
+    }
+
+    function encryptMessage(plaintext, sessionKey, iv) {
+        return CryptoJS.AES.encrypt(plaintext, CryptoJS.enc.Hex.parse(sessionKey), {
+            iv: CryptoJS.enc.Hex.parse(iv)
+        }).toString();
+    }
+
+    function decryptMessage(ciphertext, sessionKey, iv) {
+        const bytes = CryptoJS.AES.decrypt(ciphertext, CryptoJS.enc.Hex.parse(sessionKey), {
+            iv: CryptoJS.enc.Hex.parse(iv)
+        });
+        return bytes.toString(CryptoJS.enc.Utf8);
+    }
+
+    function encryptSessionKey(sessionKey, publicKey) {
+        const encrypt = new JSEncrypt();
+        encrypt.setPublicKey(publicKey);
+        return encrypt.encrypt(sessionKey);
+    }
+
+    function decryptSessionKey(encryptedSessionKey) {
+        const decrypt = new JSEncrypt();
+        decrypt.setPrivateKey(privateKey);
+        return decrypt.decrypt(encryptedSessionKey);
+    }
+
+
+    // --- Socket & UI Logic ---
+
+    // Join room on connect
+    socket.on('connect', function() {
+        socket.emit('join', {username: username, room: room});
+    });
+
+    // Listen for new members joining
+    socket.on('member_joined', function(data) {
+        // Check if member already exists
+        const exists = members.some(m => m.id === data.id);
+        if (!exists) {
+            members.push({
+                id: data.id,
+                username: data.username,
+                public_key: data.public_key
+            });
+            console.log("New member added for encryption:", data.username);
+        }
+    });
+
+    // Listen for messages
+    socket.on('message', function(data) {
+        const messagesDiv = document.getElementById('messages');
+        const msgElement = document.createElement('div');
+        
+        if (data.username === 'System') {
+            msgElement.className = 'text-center text-muted my-2';
+            msgElement.innerHTML = `<small>${data.msg}</small>`;
+            messagesDiv.appendChild(msgElement);
+        } else {
+            // It's a user message, we need to decrypt it
+            // data contains: ciphertext, iv, sender_username, recipients
+            
+            let plaintext = "[Encrypted Message]";
+            
+            if (data.sender_username === username) {
+                // If I sent it, I should have encrypted it for myself too?
+                // Or I just display what I typed? 
+                // For simplicity, let's try to decrypt if I'm in recipients list (which I should be)
+            }
+
+            // Find my encrypted key
+            const myRecipientData = data.recipients.find(r => r.user_id === currentUserId);
+
+            if (myRecipientData && privateKey) {
+                try {
+                    const sessionKey = decryptSessionKey(myRecipientData.encrypted_session_key);
+                    if (sessionKey) {
+                        plaintext = decryptMessage(data.ciphertext, sessionKey, data.iv);
+                    }
+                } catch (e) {
+                    console.error("Decryption failed", e);
+                }
+            }
+
+            const timestamp = data.timestamp;
+            const date = new Date(timestamp.replace(" ", "T"));
+            const time = date.toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            });
+
+            if (data.sender_username === username) {
+                msgElement.className = 'message-bubble sent mb-2 align-self-end';
+                msgElement.innerHTML = `<strong>You</strong><br> ${plaintext} <small class="text-muted ms-2" style="font-size: 0.7em;">${time}</small>`;
+            } else {
+                msgElement.className = 'message-bubble received mb-2 align-self-start';
+                msgElement.innerHTML = `<strong>${data.sender_username}</strong><br> ${plaintext} <small class="text-muted ms-2" style="font-size: 0.7em;">${time}</small>`;
+            }
+            messagesDiv.appendChild(msgElement);
+        }
+        
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    // Send message
+    document.getElementById('message-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!privateKey) {
+            alert("Please unlock your private key first!");
+            return;
+        }
+
+        const input = document.getElementById('message-input');
+        const message = input.value;
+        
+        if (message.trim()) {
+            // 1. Generate Session Key & IV
+            const sessionKey = generateSessionKey();
+            const iv = generateIV();
+
+            // 2. Encrypt Message
+            const ciphertext = encryptMessage(message, sessionKey, iv);
+
+            // 3. Encrypt Session Key for EACH member
+            const recipients = [];
+            members.forEach(member => {
+                const encryptedKey = encryptSessionKey(sessionKey, member.public_key);
+                if (encryptedKey) {
+                    recipients.push({
+                        user_id: member.id,
+                        encrypted_session_key: encryptedKey
+                    });
+                }
+            });
+
+            // 4. Send to Server
+            socket.emit('message', {
+                room: room,
+                room_id: roomId,
+                sender_username: username,
+                ciphertext: ciphertext,
+                iv: iv,
+                recipients: recipients
+            });
+
+            input.value = '';
+        }
+    });
+
+    // Decrypt History on Load
+    function decryptHistory() {
+        const historyItems = document.querySelectorAll('.history-item');
+        historyItems.forEach(item => {
+            const ciphertext = item.dataset.ciphertext;
+            const iv = item.dataset.iv;
+            const encryptedKey = item.dataset.encryptedKey;
+            const sender = item.dataset.sender;
+            const timestamp = item.dataset.timestamp;
+
+            const raw = item.dataset.timestamp;
+            const date = new Date(raw.replace(" ", "T"));
+
+            const time = date.toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            });
+            
+            try {
+                const sessionKey = decryptSessionKey(encryptedKey);
+                if (sessionKey) {
+                    const plaintext = decryptMessage(ciphertext, sessionKey, iv);
+                    item.innerHTML = `<strong>${sender}</strong><br> ${plaintext} <small class="text-muted ms-2" style="font-size: 0.7em;">${time}</small>`;
+                } else {
+                    item.innerHTML = `<strong>${sender}</strong><br> [Decryption Failed] <small class="text-muted ms-2" style="font-size: 0.7em;">${time}</small>`;
+                }
+            } catch (e) {
+                console.error("History decryption failed", e);
+                item.innerHTML = `<strong>${sender}</strong><br> [Error] <small class="text-muted ms-2" style="font-size: 0.7em;">${time}</small>`;
+            }
+        });
+    }
+
+    // Leave room
+    window.onbeforeunload = function() {
+        socket.emit('leave', {username: username, room: room});
+    };
+</script>
+{% endblock %}
