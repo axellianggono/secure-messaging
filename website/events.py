@@ -15,6 +15,8 @@ def on_join(data):
     # Get user details to broadcast public key
     user = User.query.filter_by(username=username).first()
     if user:
+        print(f"DEBUG: User {username} joined. Public Key Length: {len(user.kunci_publik)}")
+        print(f"DEBUG: Public Key Start: {user.kunci_publik[:50]}...")
         emit('member_joined', {
             'id': user.id,
             'username': user.username,

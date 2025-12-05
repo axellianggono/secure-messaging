@@ -335,7 +335,9 @@
                 minute: "2-digit",
                 second: "2-digit"
             });
-            
+
+            console.log(encryptedKey);
+
             try {
                 const sessionKey = decryptSessionKey(encryptedKey);
                 if (sessionKey) {

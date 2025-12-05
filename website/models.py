@@ -30,7 +30,7 @@ class Chat(db.Model):
 class Room(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     room_name = db.Column(db.String(20), nullable=False)
-    password = db.Column(db.String(60), nullable=True)
+    password = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return f"Room('{self.room_name}')"
